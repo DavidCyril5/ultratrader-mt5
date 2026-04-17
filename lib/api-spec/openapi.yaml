@@ -3,20 +3,23 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: UltraTrader Bot API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: bot
+    description: Bot configuration and control
+  - name: trades
+    description: Trade history and stats
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +27,148 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /bot/config:
+    get:
+      operationId: getBotConfig
+      tags: [bot]
+      summary: Get current bot configuration
+      responses:
+        "200":
+          description: Bot configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotConfig"
+    put:
+      operationId: updateBotConfig
+      tags: [bot]
+      summary: Update bot configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BotConfigInput"
+      responses:
+        "200":
+          description: Updated bot configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotConfig"
+
+  /bot/status:
+    get:
+      operationId: getBotStatus
+      tags: [bot]
+      summary: Get current bot running status
+      responses:
+        "200":
+          description: Bot status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotStatus"
+
+  /bot/start:
+    post:
+      operationId: startBot
+      tags: [bot]
+      summary: Start the trading bot
+      responses:
+        "200":
+          description: Bot started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotStatus"
+
+  /bot/stop:
+    post:
+      operationId: stopBot
+      tags: [bot]
+      summary: Stop the trading bot
+      responses:
+        "200":
+          description: Bot stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotStatus"
+
+  /bot/account:
+    post:
+      operationId: connectAccount
+      tags: [bot]
+      summary: Connect MetaApi account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountConnectInput"
+      responses:
+        "200":
+          description: Account connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountInfo"
+        "400":
+          description: Connection error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bot/account/info:
+    get:
+      operationId: getAccountInfo
+      tags: [bot]
+      summary: Get connected account info and balance
+      responses:
+        "200":
+          description: Account info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountInfo"
+
+  /trades:
+    get:
+      operationId: getTrades
+      tags: [trades]
+      summary: Get trade history
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: List of trades
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Trade"
+
+  /trades/stats:
+    get:
+      operationId: getTradeStats
+      tags: [trades]
+      summary: Get trading statistics summary
+      responses:
+        "200":
+          description: Trade stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeStats"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +176,345 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    BotConfig:
+      type: object
+      properties:
+        id:
+          type: integer
+        strategy:
+          type: string
+          enum: [ma_crossover, rsi, macd, bollinger, combined]
+        symbols:
+          type: array
+          items:
+            type: string
+        timeframe:
+          type: string
+          enum: [M1, M5, M15, M30, H1, H4, D1]
+        lotMode:
+          type: string
+          enum: [fixed, percent_balance, fixed_dollar]
+        fixedLot:
+          type: number
+        riskPercent:
+          type: number
+        fixedDollarRisk:
+          type: number
+        stopLossPips:
+          type: number
+        takeProfitPips:
+          type: number
+        useTrailingStop:
+          type: boolean
+        trailingPips:
+          type: number
+        useBreakEven:
+          type: boolean
+        breakEvenPips:
+          type: number
+        maxPositions:
+          type: integer
+        maxBuys:
+          type: integer
+        maxSells:
+          type: integer
+        tradeDirection:
+          type: string
+          enum: [both, buy_only, sell_only]
+        session:
+          type: string
+          enum: [all, london, new_york, tokyo, overlap]
+        useSpreadFilter:
+          type: boolean
+        maxSpreadPips:
+          type: number
+        useDailyProfitLimit:
+          type: boolean
+        dailyProfitLimit:
+          type: number
+        useDailyLossLimit:
+          type: boolean
+        dailyLossLimit:
+          type: number
+        fastMaPeriod:
+          type: integer
+        slowMaPeriod:
+          type: integer
+        trendMaPeriod:
+          type: integer
+        rsiPeriod:
+          type: integer
+        rsiOverbought:
+          type: number
+        rsiOversold:
+          type: number
+        macdFastEma:
+          type: integer
+        macdSlowEma:
+          type: integer
+        macdSignal:
+          type: integer
+        bbPeriod:
+          type: integer
+        bbDeviation:
+          type: number
+        updatedAt:
+          type: string
+      required:
+        - id
+        - strategy
+        - symbols
+        - timeframe
+        - lotMode
+        - fixedLot
+        - riskPercent
+        - fixedDollarRisk
+        - stopLossPips
+        - takeProfitPips
+        - useTrailingStop
+        - trailingPips
+        - useBreakEven
+        - breakEvenPips
+        - maxPositions
+        - maxBuys
+        - maxSells
+        - tradeDirection
+        - session
+        - useSpreadFilter
+        - maxSpreadPips
+        - useDailyProfitLimit
+        - dailyProfitLimit
+        - useDailyLossLimit
+        - dailyLossLimit
+        - fastMaPeriod
+        - slowMaPeriod
+        - trendMaPeriod
+        - rsiPeriod
+        - rsiOverbought
+        - rsiOversold
+        - macdFastEma
+        - macdSlowEma
+        - macdSignal
+        - bbPeriod
+        - bbDeviation
+
+    BotConfigInput:
+      type: object
+      properties:
+        strategy:
+          type: string
+          enum: [ma_crossover, rsi, macd, bollinger, combined]
+        symbols:
+          type: array
+          items:
+            type: string
+        timeframe:
+          type: string
+          enum: [M1, M5, M15, M30, H1, H4, D1]
+        lotMode:
+          type: string
+          enum: [fixed, percent_balance, fixed_dollar]
+        fixedLot:
+          type: number
+        riskPercent:
+          type: number
+        fixedDollarRisk:
+          type: number
+        stopLossPips:
+          type: number
+        takeProfitPips:
+          type: number
+        useTrailingStop:
+          type: boolean
+        trailingPips:
+          type: number
+        useBreakEven:
+          type: boolean
+        breakEvenPips:
+          type: number
+        maxPositions:
+          type: integer
+        maxBuys:
+          type: integer
+        maxSells:
+          type: integer
+        tradeDirection:
+          type: string
+          enum: [both, buy_only, sell_only]
+        session:
+          type: string
+          enum: [all, london, new_york, tokyo, overlap]
+        useSpreadFilter:
+          type: boolean
+        maxSpreadPips:
+          type: number
+        useDailyProfitLimit:
+          type: boolean
+        dailyProfitLimit:
+          type: number
+        useDailyLossLimit:
+          type: boolean
+        dailyLossLimit:
+          type: number
+        fastMaPeriod:
+          type: integer
+        slowMaPeriod:
+          type: integer
+        trendMaPeriod:
+          type: integer
+        rsiPeriod:
+          type: integer
+        rsiOverbought:
+          type: number
+        rsiOversold:
+          type: number
+        macdFastEma:
+          type: integer
+        macdSlowEma:
+          type: integer
+        macdSignal:
+          type: integer
+        bbPeriod:
+          type: integer
+        bbDeviation:
+          type: number
+
+    BotStatus:
+      type: object
+      properties:
+        running:
+          type: boolean
+        message:
+          type: string
+        connectedAccountId:
+          type: string
+        connectedBroker:
+          type: string
+        activeTrades:
+          type: integer
+        lastSignalAt:
+          type: string
+      required: [running, message]
+
+    AccountConnectInput:
+      type: object
+      properties:
+        metaApiToken:
+          type: string
+        accountId:
+          type: string
+      required: [metaApiToken, accountId]
+
+    AccountInfo:
+      type: object
+      properties:
+        accountId:
+          type: string
+        broker:
+          type: string
+        server:
+          type: string
+        login:
+          type: string
+        balance:
+          type: number
+        equity:
+          type: number
+        margin:
+          type: number
+        freeMargin:
+          type: number
+        currency:
+          type: string
+        connected:
+          type: boolean
+      required: [accountId, connected]
+
+    Trade:
+      type: object
+      properties:
+        id:
+          type: integer
+        symbol:
+          type: string
+        type:
+          type: string
+          enum: [buy, sell]
+        lots:
+          type: number
+        openPrice:
+          type: number
+        closePrice:
+          type: number
+        stopLoss:
+          type: number
+        takeProfit:
+          type: number
+        profit:
+          type: number
+        pips:
+          type: number
+        openTime:
+          type: string
+        closeTime:
+          type: string
+        status:
+          type: string
+          enum: [open, closed, cancelled]
+        strategy:
+          type: string
+      required: [id, symbol, type, lots, openPrice, openTime, status]
+
+    TradeStats:
+      type: object
+      properties:
+        totalTrades:
+          type: integer
+        winCount:
+          type: integer
+        lossCount:
+          type: integer
+        winRate:
+          type: number
+        totalProfit:
+          type: number
+        totalLoss:
+          type: number
+        netProfit:
+          type: number
+        profitFactor:
+          type: number
+        avgWin:
+          type: number
+        avgLoss:
+          type: number
+        bestTrade:
+          type: number
+        worstTrade:
+          type: number
+        openTrades:
+          type: integer
+        todayProfit:
+          type: number
+      required:
+        - totalTrades
+        - winCount
+        - lossCount
+        - winRate
+        - totalProfit
+        - totalLoss
+        - netProfit
+        - profitFactor
+        - openTrades
+        - todayProfit
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required: [error, message]
