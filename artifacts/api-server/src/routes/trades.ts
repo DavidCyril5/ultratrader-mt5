@@ -1,7 +1,5 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
-import { tradesTable } from "@workspace/db";
-import { desc, eq, sql } from "drizzle-orm";
+import { Trade } from "@workspace/db";
 
 const router = Router();
 
@@ -9,13 +7,22 @@ const router = Router();
 router.get("/trades", async (req, res) => {
   try {
     const limit = parseInt(req.query.limit as string) || 50;
-    const trades = await db.select().from(tradesTable)
-      .orderBy(desc(tradesTable.openTime))
-      .limit(limit);
+    const trades = await Trade.find().sort({ openTime: -1 }).limit(limit);
     res.json(trades.map(t => ({
-      ...t,
+      id: t._id,
+      symbol: t.symbol,
+      type: t.type,
+      lots: t.lots,
+      openPrice: t.openPrice,
+      closePrice: t.closePrice ?? null,
+      stopLoss: t.stopLoss ?? null,
+      takeProfit: t.takeProfit ?? null,
+      profit: t.profit ?? null,
+      pips: t.pips ?? null,
       openTime: t.openTime?.toISOString(),
       closeTime: t.closeTime?.toISOString() ?? null,
+      status: t.status,
+      strategy: t.strategy ?? null,
     })));
   } catch (err) {
     req.log.error({ err }, "Failed to get trades");
@@ -26,7 +33,7 @@ router.get("/trades", async (req, res) => {
 // GET /trades/stats
 router.get("/trades/stats", async (req, res) => {
   try {
-    const trades = await db.select().from(tradesTable);
+    const trades = await Trade.find();
     const closed = trades.filter(t => t.status === "closed");
     const open = trades.filter(t => t.status === "open");
     const wins = closed.filter(t => (t.profit ?? 0) > 0);

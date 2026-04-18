@@ -1,7 +1,5 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
-import { botConfigTable, accountConnectionTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { BotConfig, AccountConnection } from "@workspace/db";
 import { UpdateBotConfigBody } from "@workspace/api-zod";
 
 const router = Router();
@@ -9,13 +7,11 @@ const router = Router();
 // GET /bot/config
 router.get("/bot/config", async (req, res) => {
   try {
-    let config = await db.query.botConfigTable.findFirst();
+    let config = await BotConfig.findOne();
     if (!config) {
-      const inserted = await db.insert(botConfigTable).values({}).returning();
-      config = inserted[0];
+      config = await new BotConfig({}).save();
     }
-    const symbols = JSON.parse(config.symbols || '["EURUSD","XAUUSD"]');
-    res.json({ ...config, symbols });
+    res.json(config.toObject());
   } catch (err) {
     req.log.error({ err }, "Failed to get bot config");
     res.status(500).json({ error: "internal_error", message: "Failed to get bot config" });
@@ -31,23 +27,13 @@ router.put("/bot/config", async (req, res) => {
       return;
     }
 
-    const body = parsed.data;
-    const updateData: Record<string, unknown> = { ...body, updatedAt: new Date() };
-    if (body.symbols) {
-      updateData.symbols = JSON.stringify(body.symbols);
-    }
+    const config = await BotConfig.findOneAndUpdate(
+      {},
+      { ...parsed.data, updatedAt: new Date() },
+      { new: true, upsert: true }
+    );
 
-    let config = await db.query.botConfigTable.findFirst();
-    if (!config) {
-      const inserted = await db.insert(botConfigTable).values(updateData as Parameters<typeof db.insert>[1] extends { values: infer V } ? V : never).returning();
-      config = inserted[0];
-    } else {
-      const updated = await db.update(botConfigTable).set(updateData).where(eq(botConfigTable.id, config.id)).returning();
-      config = updated[0];
-    }
-
-    const symbols = JSON.parse(config.symbols || '["EURUSD","XAUUSD"]');
-    res.json({ ...config, symbols });
+    res.json(config!.toObject());
   } catch (err) {
     req.log.error({ err }, "Failed to update bot config");
     res.status(500).json({ error: "internal_error", message: "Failed to update bot config" });
@@ -57,7 +43,7 @@ router.put("/bot/config", async (req, res) => {
 // GET /bot/status
 router.get("/bot/status", async (req, res) => {
   try {
-    const account = await db.query.accountConnectionTable.findFirst();
+    const account = await AccountConnection.findOne();
     res.json({
       running: account?.botRunning ?? false,
       message: account?.botRunning ? "Bot is actively trading" : "Bot is stopped",
@@ -75,14 +61,15 @@ router.get("/bot/status", async (req, res) => {
 // POST /bot/start
 router.post("/bot/start", async (req, res) => {
   try {
-    const account = await db.query.accountConnectionTable.findFirst();
+    const account = await AccountConnection.findOne();
     if (!account || !account.connected) {
       res.status(400).json({ error: "not_connected", message: "No MT5 account connected. Please connect your account first." });
       return;
     }
-    await db.update(accountConnectionTable)
-      .set({ botRunning: true, lastSignalAt: new Date(), updatedAt: new Date() })
-      .where(eq(accountConnectionTable.id, account.id));
+    account.botRunning = true;
+    account.lastSignalAt = new Date();
+    account.updatedAt = new Date();
+    await account.save();
 
     res.json({
       running: true,
@@ -100,11 +87,11 @@ router.post("/bot/start", async (req, res) => {
 // POST /bot/stop
 router.post("/bot/stop", async (req, res) => {
   try {
-    const account = await db.query.accountConnectionTable.findFirst();
+    const account = await AccountConnection.findOne();
     if (account) {
-      await db.update(accountConnectionTable)
-        .set({ botRunning: false, updatedAt: new Date() })
-        .where(eq(accountConnectionTable.id, account.id));
+      account.botRunning = false;
+      account.updatedAt = new Date();
+      await account.save();
     }
     res.json({
       running: false,
@@ -128,13 +115,9 @@ router.post("/bot/account", async (req, res) => {
       return;
     }
 
-    // Simulate connection validation (MetaApi would be called here)
-    // In production with metaapi.cloud credentials, integrate the metaapi-cloud-sdk package
     const brokerNames = ["Just Markets", "XM Markets", "RCG Markets", "IC Markets", "Pepperstone"];
     const randomBroker = brokerNames[Math.floor(Math.random() * brokerNames.length)];
 
-    // Store or update account connection
-    const existing = await db.query.accountConnectionTable.findFirst();
     const accountData = {
       metaApiToken,
       accountId,
@@ -148,31 +131,26 @@ router.post("/bot/account", async (req, res) => {
       currency: "USD",
       connected: true,
       botRunning: false,
+      updatedAt: new Date(),
     };
 
-    let account;
-    if (existing) {
-      const updated = await db.update(accountConnectionTable)
-        .set({ ...accountData, updatedAt: new Date() })
-        .where(eq(accountConnectionTable.id, existing.id))
-        .returning();
-      account = updated[0];
-    } else {
-      const inserted = await db.insert(accountConnectionTable).values(accountData).returning();
-      account = inserted[0];
-    }
+    const account = await AccountConnection.findOneAndUpdate(
+      {},
+      accountData,
+      { new: true, upsert: true }
+    );
 
     res.json({
-      accountId: account.accountId,
-      broker: account.broker,
-      server: account.server,
-      login: account.login,
-      balance: account.balance,
-      equity: account.equity,
-      margin: account.margin,
-      freeMargin: account.freeMargin,
-      currency: account.currency,
-      connected: account.connected,
+      accountId: account!.accountId,
+      broker: account!.broker,
+      server: account!.server,
+      login: account!.login,
+      balance: account!.balance,
+      equity: account!.equity,
+      margin: account!.margin,
+      freeMargin: account!.freeMargin,
+      currency: account!.currency,
+      connected: account!.connected,
     });
   } catch (err) {
     req.log.error({ err }, "Failed to connect account");
@@ -183,7 +161,7 @@ router.post("/bot/account", async (req, res) => {
 // GET /bot/account/info
 router.get("/bot/account/info", async (req, res) => {
   try {
-    const account = await db.query.accountConnectionTable.findFirst();
+    const account = await AccountConnection.findOne();
     if (!account || !account.connected) {
       res.json({ accountId: "", connected: false });
       return;

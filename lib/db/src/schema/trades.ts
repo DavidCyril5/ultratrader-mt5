@@ -1,24 +1,37 @@
-import { pgTable, serial, text, real, timestamp } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
+import mongoose, { Schema, Document } from "mongoose";
 
-export const tradesTable = pgTable("trades", {
-  id: serial("id").primaryKey(),
-  symbol: text("symbol").notNull(),
-  type: text("type").notNull(),
-  lots: real("lots").notNull(),
-  openPrice: real("open_price").notNull(),
-  closePrice: real("close_price"),
-  stopLoss: real("stop_loss"),
-  takeProfit: real("take_profit"),
-  profit: real("profit"),
-  pips: real("pips"),
-  openTime: timestamp("open_time").notNull().defaultNow(),
-  closeTime: timestamp("close_time"),
-  status: text("status").notNull().default("open"),
-  strategy: text("strategy"),
+export interface ITrade extends Document {
+  symbol: string;
+  type: string;
+  lots: number;
+  openPrice: number;
+  closePrice?: number;
+  stopLoss?: number;
+  takeProfit?: number;
+  profit?: number;
+  pips?: number;
+  openTime: Date;
+  closeTime?: Date;
+  status: string;
+  strategy?: string;
+}
+
+const TradeSchema = new Schema<ITrade>({
+  symbol: { type: String, required: true },
+  type: { type: String, required: true },
+  lots: { type: Number, required: true },
+  openPrice: { type: Number, required: true },
+  closePrice: { type: Number },
+  stopLoss: { type: Number },
+  takeProfit: { type: Number },
+  profit: { type: Number },
+  pips: { type: Number },
+  openTime: { type: Date, default: Date.now },
+  closeTime: { type: Date },
+  status: { type: String, default: "open" },
+  strategy: { type: String },
 });
 
-export const insertTradeSchema = createInsertSchema(tradesTable).omit({ id: true });
-export type InsertTrade = z.infer<typeof insertTradeSchema>;
-export type Trade = typeof tradesTable.$inferSelect;
+export const Trade =
+  (mongoose.models.Trade as mongoose.Model<ITrade>) ||
+  mongoose.model<ITrade>("Trade", TradeSchema);

@@ -14,8 +14,8 @@
     "@workspace/db": "workspace:*",
     "cookie-parser": "^1.4.7",
     "cors": "^2",
-    "drizzle-orm": "catalog:",
     "express": "^5",
+    "mongoose": "^9.4.1",
     "pino": "^9",
     "pino-http": "^10"
   },
