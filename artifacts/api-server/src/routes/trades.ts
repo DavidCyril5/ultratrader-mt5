@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { Trade } from "@workspace/db";
+import { Trade, AccountConnection } from "@workspace/db";
+import * as MetaApiService from "../lib/metaapi.js";
 
 const router = Router();
 
@@ -72,6 +73,57 @@ router.get("/trades/stats", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to get trade stats");
     res.status(500).json({ error: "internal_error", message: "Failed to get trade stats" });
+  }
+});
+
+// POST /trades/sync — pull real deal history from MetaApi into MongoDB
+router.post("/trades/sync", async (req, res) => {
+  try {
+    const account = await AccountConnection.findOne();
+    if (!account?.connected) {
+      res.status(400).json({ error: "not_connected", message: "No account connected" });
+      return;
+    }
+
+    const days = parseInt(req.query.days as string) || 30;
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const to = new Date();
+
+    let deals;
+    try {
+      deals = await MetaApiService.getDeals(account.accountId, from, to);
+    } catch (err) {
+      res.status(400).json({ error: "sync_error", message: "Failed to fetch deals from MetaApi" });
+      return;
+    }
+
+    let imported = 0;
+    for (const deal of deals ?? []) {
+      // Only import opening deals (not commissions/fees)
+      if (!deal.symbol || !deal.type?.includes("BUY") && !deal.type?.includes("SELL")) continue;
+      if (deal.entryType === "DEAL_ENTRY_OUT") continue; // skip closing legs
+
+      const exists = await Trade.findOne({ externalId: String(deal.id) });
+      if (exists) continue;
+
+      const type = deal.type?.includes("BUY") ? "buy" : "sell";
+      await new Trade({
+        externalId: String(deal.id),
+        symbol: deal.symbol,
+        type,
+        lots: deal.volume ?? 0.01,
+        openPrice: deal.price ?? 0,
+        profit: deal.profit ?? 0,
+        openTime: deal.time ? new Date(deal.time) : new Date(),
+        status: "closed",
+      }).save();
+      imported++;
+    }
+
+    res.json({ synced: imported, message: `Imported ${imported} deals from MetaApi` });
+  } catch (err) {
+    req.log.error({ err }, "Failed to sync trades");
+    res.status(500).json({ error: "internal_error", message: "Failed to sync trades" });
   }
 });
 

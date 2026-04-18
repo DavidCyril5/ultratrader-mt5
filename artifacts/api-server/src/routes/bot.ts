@@ -1,6 +1,9 @@
 import { Router } from "express";
 import { BotConfig, AccountConnection } from "@workspace/db";
 import { UpdateBotConfigBody } from "@workspace/api-zod";
+import * as MetaApiService from "../lib/metaapi.js";
+import { startTradingEngine, stopTradingEngine } from "../lib/tradingEngine.js";
+import { logger } from "../lib/logger.js";
 
 const router = Router();
 
@@ -8,9 +11,7 @@ const router = Router();
 router.get("/bot/config", async (req, res) => {
   try {
     let config = await BotConfig.findOne();
-    if (!config) {
-      config = await new BotConfig({}).save();
-    }
+    if (!config) config = await new BotConfig({}).save();
     res.json(config.toObject());
   } catch (err) {
     req.log.error({ err }, "Failed to get bot config");
@@ -26,13 +27,11 @@ router.put("/bot/config", async (req, res) => {
       res.status(400).json({ error: "validation_error", message: parsed.error.message });
       return;
     }
-
     const config = await BotConfig.findOneAndUpdate(
       {},
       { ...parsed.data, updatedAt: new Date() },
       { new: true, upsert: true }
     );
-
     res.json(config!.toObject());
   } catch (err) {
     req.log.error({ err }, "Failed to update bot config");
@@ -44,12 +43,25 @@ router.put("/bot/config", async (req, res) => {
 router.get("/bot/status", async (req, res) => {
   try {
     const account = await AccountConnection.findOne();
+    let activeTrades = account ? parseInt(account.activeTrades ?? "0") : 0;
+
+    if (account?.connected && account.accountId) {
+      try {
+        const positions = await MetaApiService.getPositions(account.accountId);
+        activeTrades = positions.length;
+        await AccountConnection.findOneAndUpdate(
+          { _id: account._id },
+          { activeTrades: String(positions.length) }
+        );
+      } catch {}
+    }
+
     res.json({
       running: account?.botRunning ?? false,
       message: account?.botRunning ? "Bot is actively trading" : "Bot is stopped",
       connectedAccountId: account?.accountId ?? null,
       connectedBroker: account?.broker ?? null,
-      activeTrades: account ? parseInt(account.activeTrades ?? "0") : 0,
+      activeTrades,
       lastSignalAt: account?.lastSignalAt?.toISOString() ?? null,
     });
   } catch (err) {
@@ -62,7 +74,7 @@ router.get("/bot/status", async (req, res) => {
 router.post("/bot/start", async (req, res) => {
   try {
     const account = await AccountConnection.findOne();
-    if (!account || !account.connected) {
+    if (!account?.connected) {
       res.status(400).json({ error: "not_connected", message: "No MT5 account connected. Please connect your account first." });
       return;
     }
@@ -70,6 +82,8 @@ router.post("/bot/start", async (req, res) => {
     account.lastSignalAt = new Date();
     account.updatedAt = new Date();
     await account.save();
+
+    startTradingEngine(account.accountId);
 
     res.json({
       running: true,
@@ -93,6 +107,8 @@ router.post("/bot/stop", async (req, res) => {
       account.updatedAt = new Date();
       await account.save();
     }
+    stopTradingEngine();
+
     res.json({
       running: false,
       message: "Bot stopped",
@@ -106,7 +122,7 @@ router.post("/bot/stop", async (req, res) => {
   }
 });
 
-// POST /bot/account
+// POST /bot/account — real MetaApi connection
 router.post("/bot/account", async (req, res) => {
   try {
     const { metaApiToken, accountId } = req.body;
@@ -115,30 +131,45 @@ router.post("/bot/account", async (req, res) => {
       return;
     }
 
-    const brokerNames = ["Just Markets", "XM Markets", "RCG Markets", "IC Markets", "Pepperstone"];
-    const randomBroker = brokerNames[Math.floor(Math.random() * brokerNames.length)];
+    logger.info({ accountId }, "Connecting to MetaApi account...");
+
+    // Connect via real MetaApi SDK
+    let connection;
+    try {
+      connection = await MetaApiService.connectToAccount(metaApiToken, accountId);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      logger.error({ err }, "MetaApi connection failed");
+      res.status(400).json({ error: "connection_error", message: `MetaApi connection failed: ${message}` });
+      return;
+    }
+
+    // Get real account information
+    let info;
+    try {
+      info = await connection.getAccountInformation();
+    } catch (err) {
+      res.status(400).json({ error: "connection_error", message: "Connected but failed to fetch account info" });
+      return;
+    }
 
     const accountData = {
       metaApiToken,
       accountId,
-      broker: randomBroker,
-      server: `${randomBroker.replace(" ", "")}-Server01`,
-      login: accountId.slice(-6),
-      balance: 10000 + Math.random() * 40000,
-      equity: 10500 + Math.random() * 40000,
-      margin: 200 + Math.random() * 500,
-      freeMargin: 9500 + Math.random() * 35000,
-      currency: "USD",
+      broker: info.broker ?? info.company ?? "Unknown Broker",
+      server: info.server ?? "Unknown",
+      login: String(info.login ?? accountId.slice(-6)),
+      balance: info.balance ?? 0,
+      equity: info.equity ?? 0,
+      margin: info.margin ?? 0,
+      freeMargin: info.freeMargin ?? 0,
+      currency: info.currency ?? "USD",
       connected: true,
       botRunning: false,
       updatedAt: new Date(),
     };
 
-    const account = await AccountConnection.findOneAndUpdate(
-      {},
-      accountData,
-      { new: true, upsert: true }
-    );
+    const account = await AccountConnection.findOneAndUpdate({}, accountData, { new: true, upsert: true });
 
     res.json({
       accountId: account!.accountId,
@@ -158,14 +189,28 @@ router.post("/bot/account", async (req, res) => {
   }
 });
 
-// GET /bot/account/info
+// GET /bot/account/info — with live refresh from MetaApi
 router.get("/bot/account/info", async (req, res) => {
   try {
     const account = await AccountConnection.findOne();
-    if (!account || !account.connected) {
+    if (!account?.connected) {
       res.json({ accountId: "", connected: false });
       return;
     }
+
+    // Try to refresh live data from MetaApi
+    try {
+      const info = await MetaApiService.getAccountInformation(account.accountId);
+      account.balance = info.balance ?? account.balance;
+      account.equity = info.equity ?? account.equity;
+      account.margin = info.margin ?? account.margin;
+      account.freeMargin = info.freeMargin ?? account.freeMargin;
+      account.updatedAt = new Date();
+      await account.save();
+    } catch {
+      // Use cached data if live refresh fails
+    }
+
     res.json({
       accountId: account.accountId,
       broker: account.broker,

@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface ITrade extends Document {
+  externalId?: string;
   symbol: string;
   type: string;
   lots: number;
@@ -17,6 +18,7 @@ export interface ITrade extends Document {
 }
 
 const TradeSchema = new Schema<ITrade>({
+  externalId: { type: String, index: true, sparse: true },
   symbol: { type: String, required: true },
   type: { type: String, required: true },
   lots: { type: Number, required: true },

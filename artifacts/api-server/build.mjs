@@ -115,6 +115,13 @@ import __bannerUrl from 'node:url';
 globalThis.require = __bannerCrReq(import.meta.url);
 globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
 globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
+
+// metaapi.cloud-sdk is a webpack bundle targeting browsers.
+// Polyfill window/self so it can run in Node.js (FormData is native in Node 18+).
+if (typeof globalThis.window === 'undefined') {
+  globalThis.window = globalThis;
+  globalThis.self = globalThis;
+}
     `,
     },
   });
