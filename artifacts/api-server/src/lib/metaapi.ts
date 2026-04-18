@@ -13,8 +13,14 @@ export async function connectToAccount(token: string, accountId: string) {
   const api = new MetaApi(token);
   const account = await api.metatraderAccountApi.getAccount(accountId);
 
-  if (account.state !== "DEPLOYED" && account.state !== "DEPLOYING") {
-    await account.deploy();
+  // Account should already be deployed from the MetaApi dashboard.
+  // Only attempt deploy if it's in UNDEPLOYED state and we have permission.
+  if (account.state === "UNDEPLOYED") {
+    try {
+      await account.deploy();
+    } catch {
+      // Token may not have deploy permission — skip if already managed via dashboard
+    }
   }
   await account.waitConnected();
 
