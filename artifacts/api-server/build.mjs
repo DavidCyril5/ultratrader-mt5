@@ -16,6 +16,7 @@ async function buildAll() {
 
   await esbuild({
     entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    inject: [path.resolve(artifactDir, "src/polyfills.ts")],
     platform: "node",
     bundle: true,
     format: "esm",
