@@ -160,7 +160,7 @@ export default function Settings() {
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Strategy Configuration</h1>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Strategy Configuration</h1>
           <p className="text-muted-foreground text-sm font-mono mt-1">Configure trading algorithms and risk parameters</p>
         </div>
         <Button 
@@ -176,12 +176,14 @@ export default function Settings() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Tabs defaultValue="strategy" className="w-full">
-            <TabsList className="grid grid-cols-4 w-full bg-secondary/50 p-1 mb-6">
-              <TabsTrigger value="strategy" className="data-[state=active]:bg-card">Strategy</TabsTrigger>
-              <TabsTrigger value="risk" className="data-[state=active]:bg-card">Risk Mgt</TabsTrigger>
-              <TabsTrigger value="limits" className="data-[state=active]:bg-card">Limits</TabsTrigger>
-              <TabsTrigger value="indicators" className="data-[state=active]:bg-card">Indicators</TabsTrigger>
-            </TabsList>
+            <div className="overflow-x-auto mb-6 -mx-1 px-1">
+              <TabsList className="flex min-w-max w-full sm:grid sm:grid-cols-4 bg-secondary/50 p-1">
+                <TabsTrigger value="strategy" className="data-[state=active]:bg-card min-w-[90px]">Strategy</TabsTrigger>
+                <TabsTrigger value="risk" className="data-[state=active]:bg-card min-w-[90px]">Risk Mgt</TabsTrigger>
+                <TabsTrigger value="limits" className="data-[state=active]:bg-card min-w-[90px]">Limits</TabsTrigger>
+                <TabsTrigger value="indicators" className="data-[state=active]:bg-card min-w-[90px]">Indicators</TabsTrigger>
+              </TabsList>
+            </div>
 
             <TabsContent value="strategy" className="space-y-6 mt-0">
               <Card className="bg-card border-border">
