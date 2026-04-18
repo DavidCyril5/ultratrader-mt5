@@ -41,7 +41,7 @@ export interface IBotConfig extends Document {
 
 const BotConfigSchema = new Schema<IBotConfig>({
   strategy: { type: String, default: "combined" },
-  symbols: { type: [String], default: ["EURUSD", "XAUUSD"] },
+  symbols: { type: [String], default: ["XAUUSD", "USDZAR", "BTCUSD"] },
   timeframe: { type: String, default: "H1" },
   lotMode: { type: String, default: "percent_balance" },
   fixedLot: { type: Number, default: 0.01 },

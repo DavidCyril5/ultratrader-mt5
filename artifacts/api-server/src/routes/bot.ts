@@ -125,6 +125,22 @@ router.post("/bot/stop", async (req, res) => {
   }
 });
 
+// DELETE /bot/account — disconnect and clear the saved account
+router.delete("/bot/account", async (req, res) => {
+  try {
+    const account = await AccountConnection.findOne();
+    if (account?.accountId) {
+      try { MetaApiService.disconnectAccount(account.accountId); } catch {}
+    }
+    stopTradingEngine();
+    await AccountConnection.deleteMany({});
+    res.json({ success: true, message: "Account disconnected" });
+  } catch (err) {
+    req.log.error({ err }, "Failed to disconnect account");
+    res.status(500).json({ error: "internal_error", message: "Failed to disconnect" });
+  }
+});
+
 // POST /bot/account — saves credentials, fetches account details via REST, connects WebSocket in background
 router.post("/bot/account", async (req, res) => {
   try {

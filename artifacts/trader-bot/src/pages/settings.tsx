@@ -272,7 +272,7 @@ export default function Settings() {
                     <FormItem>
                       <FormLabel className="text-xs uppercase tracking-wider font-mono text-muted-foreground">Traded Symbols</FormLabel>
                       <FormControl>
-                        <Input placeholder="EURUSD, GBPUSD, XAUUSD" className="font-mono" {...field} />
+                        <Input placeholder="XAUUSD, USDZAR, BTCUSD" className="font-mono" {...field} />
                       </FormControl>
                       <FormDescription className="text-xs">Comma separated list of symbols exactly as they appear in MT5.</FormDescription>
                       <FormMessage />

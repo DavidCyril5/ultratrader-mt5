@@ -1,9 +1,20 @@
+import { useState } from "react";
 import { useLocation, Link } from "wouter";
-import { LayoutDashboard, Settings, ListOrdered, Activity, LogOut } from "lucide-react";
+import { LayoutDashboard, Settings, ListOrdered, Activity, LogOut, Loader2 } from "lucide-react";
 import { useGetAccountInfo, getGetAccountInfoQueryKey, useGetBotStatus, getGetBotStatusQueryKey } from "@workspace/api-client-react";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await fetch("/api/bot/account", { method: "DELETE" });
+    } catch {}
+    // Full page reload so no stale query cache can redirect back to dashboard
+    window.location.href = import.meta.env.BASE_URL || "/";
+  };
   const { data: accountInfo } = useGetAccountInfo({
     query: { queryKey: getGetAccountInfoQueryKey() }
   });
@@ -96,9 +107,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               <div className={`h-1.5 w-1.5 rounded-full ${botStatus?.running ? "bg-green-500" : "bg-muted-foreground"}`} />
             </div>
 
-            <Link href="/" className="text-muted-foreground hover:text-destructive transition-colors" title="Disconnect">
-              <LogOut className="h-4 w-4" />
-            </Link>
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive hover:text-white transition-all disabled:opacity-50 md:bg-transparent md:text-muted-foreground md:hover:bg-transparent md:hover:text-destructive md:px-1 md:py-1"
+              title="Disconnect account">
+              {isLoggingOut
+                ? <Loader2 className="h-5 w-5 md:h-4 md:w-4 animate-spin" />
+                : <LogOut className="h-5 w-5 md:h-4 md:w-4" />}
+              <span className="text-sm font-semibold md:hidden">
+                {isLoggingOut ? "Logging out..." : "Logout"}
+              </span>
+            </button>
           </div>
         </header>
 

@@ -37,6 +37,7 @@ function rsiCalc(data: number[], period: number): number {
 function pipValue(symbol: string): number {
   if (symbol === "XAUUSD") return 0.1;
   if (symbol.includes("JPY")) return 0.01;
+  if (symbol.includes("BTC") || symbol.includes("ETH") || symbol.includes("LTC")) return 1.0;
   return 0.0001;
 }
 
